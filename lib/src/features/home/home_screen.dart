@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../shared/domain/models/card_model.dart';
 import '../nfc/nfc_screen.dart';
@@ -19,6 +20,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late final TextEditingController _cardNumberController;
   late final TextEditingController _cardExpiryController;
+  String? _expiryError;
 
   @override
   void initState() {
@@ -38,6 +40,31 @@ class _HomeScreenState extends State<HomeScreen> {
     _cardExpiryController.text = cardModel.cardExpiry;
     _cardNumberController.text = cardModel.cardNumber;
   }
+
+
+
+bool _isExpiryDateValid(String expiryDate) {
+  try {
+    final parsedDate = DateFormat('MM/yy').parseStrict(expiryDate);
+    final currentDate = DateTime.now();
+    final month = parsedDate.month;
+    if (month < 1 || month > 12) {
+      return false;
+    }
+    final year = parsedDate.year;
+    if (year < 2024) {
+      return false;
+    }
+    if (year == currentDate.year && month < currentDate.month) {
+      return false; 
+    }
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -85,13 +112,19 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 onPressed: () {
-                  context.pushNamed(
-                    Routes.card,
-                    extra: CardModel(
-                      cardExpiry: _cardExpiryController.text,
-                      cardNumber: _cardNumberController.text,
-                    ),
-                  );
+                  if (_isExpiryDateValid(_cardExpiryController.text)) {
+                    context.pushNamed(
+                      Routes.card,
+                      extra: CardModel(
+                        cardExpiry: _cardExpiryController.text,
+                        cardNumber: _cardNumberController.text,
+                      ),
+                    );
+                  } else {
+                    setState(() {
+                      _expiryError = 'Amal qilish muddati xato';
+                    });
+                  }
                 },
                 child: const Text('Kartalar ro`yxatiga qo`shish'),
               ),
@@ -122,6 +155,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   prefix: CupertinoIcons.calendar,
                   maskPattern: '##/##',
                   maxLength: 5,
+                  errorText: _expiryError,
                 ),
               ],
             ),

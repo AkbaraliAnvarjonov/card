@@ -10,6 +10,7 @@ class CustomTextField extends StatelessWidget {
     this.maxLength = 19,
     this.maskPattern = '#### #### #### ####',
     super.key,
+    this.errorText,
   });
 
   final TextEditingController textEditingController;
@@ -18,11 +19,12 @@ class CustomTextField extends StatelessWidget {
   final IconData prefix;
   final String hintText;
   final Widget? suffix;
+  final String? errorText;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 60,
+      height: errorText!= null ? 80 :60,
       child: TextFormField(
         controller: textEditingController,
         textInputAction: TextInputAction.next,
@@ -50,6 +52,7 @@ class CustomTextField extends StatelessWidget {
             borderRadius: BorderRadius.all(Radius.circular(15)),
             borderSide: BorderSide(color: Colors.blue, width: 2),
           ),
+          errorText: errorText,
         ),
       ),
     );

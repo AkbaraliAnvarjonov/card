@@ -47,7 +47,7 @@ class _NFCScreenState extends State<NFCScreen> {
       await _readCardData();
     } catch (e) {
       setState(() {
-        _nfcData = "Xato yuz berdi qayta ishga tushiring\n";
+        _nfcData = "Xatolik yuz berdi qayta ishga tushiring\n";
       });
     } finally {
       setState(() {

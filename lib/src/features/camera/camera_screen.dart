@@ -1,10 +1,12 @@
-import 'dart:io';
-import 'dart:math';
-
+import 'dart:async';
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:google_ml_kit/google_ml_kit.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:permission_handler/permission_handler.dart';
+
+import '../../shared/domain/models/card_model.dart';
 
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
@@ -14,144 +16,193 @@ class CameraScreen extends StatefulWidget {
 }
 
 class _CameraScreenState extends State<CameraScreen> {
-  File? _imageFile;
-  final _picker = ImagePicker();
-  String _mlResult = '<no result>';
-  bool _isLoading = false;
+  CameraController? _controller;
+  late List<CameraDescription> cameras;
+
+  CardModel? cardModel;
+  bool _isProcessing = false;
 
   Future<void> requestPermissions() async {
     if (await Permission.camera.isDenied) {
       await Permission.camera.request();
     }
-    if (await Permission.photos.isDenied) {
-      await Permission.photos.request();
-    }
   }
 
-  Future<void> _captureImage() async {
+  Future<void> setupCamera() async {
     try {
-      final XFile? pickedFile = await _picker.pickImage(source: ImageSource.camera);
+      await requestPermissions();
+      cameras = await availableCameras();
 
-      if (pickedFile != null) {
-        setState(() {
-          _imageFile = File(pickedFile.path);
-        });
-      } else {
-        debugPrint('No image selected.');
-      }
-    } catch (e) {
-      debugPrint('Error while capturing image: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
-    }
-  }
-
-  Future<bool> _pickImage() async {
-    setState(() => _imageFile = null);
-    final File? imageFile = await showDialog<File>(
-      context: context,
-      builder: (ctx) => SimpleDialog(
-        children: <Widget>[
-          ListTile(
-            leading: const Icon(Icons.camera_alt),
-            title: const Text('Take picture'),
-            onTap: () async {
-              await _captureImage();
-              Navigator.pop(ctx);
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.image),
-            title: const Text('Pick from gallery'),
-            onTap: () async {
-              try {
-                final XFile? pickedFile = await _picker.pickImage(source: ImageSource.gallery);
-                if (ctx.mounted && pickedFile != null) {
-                  Navigator.pop(ctx, File(pickedFile.path));
-                }
-              } catch (e) {
-                print(e);
-                if (ctx.mounted) Navigator.pop(ctx, null);
-              }
-            },
-          ),
-        ],
-      ),
-    );
-    if (mounted && imageFile == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please pick one image first.')),
-      );
-      return false;
-    }
-    setState(() => _imageFile = imageFile);
-    return true;
-  }
-
-  Future<void> _textOcr() async {
-    setState(() {
-      _mlResult = '<no result>';
-      _isLoading = true;
-    });
-
-    if (await _pickImage() == false) {
-      setState(() => _isLoading = false);
-      return;
-    }
-
-    try {
-      final inputImage = InputImage.fromFile(_imageFile!);
-      final textDetector = GoogleMlKit.vision.textRecognizer();
-      final recognizedText = await textDetector.processImage(inputImage);
-      String result = 'Detected ${recognizedText.blocks.length} text blocks.\n';
-
-      for (final block in recognizedText.blocks) {
-        final text = block.text;
-        final boundingBox = block.boundingBox;
-        result += '\n# Text block:\n bbox=$boundingBox\n text=$text\n';
+      if (cameras.isEmpty) {
+        throw Exception("Kamera topilmadi.");
       }
 
-      setState(() => _mlResult = result);
+      _controller = CameraController(
+        cameras[0],
+        ResolutionPreset.high, 
+        imageFormatGroup: ImageFormatGroup.yuv420, 
+      );
+
+      await _controller!.initialize();
+
+      if (_controller!.value.isInitialized) {
+        _controller!.setFlashMode(FlashMode.off); 
+      }
+
+      _controller!.startImageStream(_processCameraImage);
+
+      setState(() {});
     } catch (e) {
-      setState(() {
-        _mlResult = 'Error occurred: $e';
-      });
+      print("Kamera sozlashda xato: $e");
+    }
+  }
+
+  void _processCameraImage(CameraImage image) async {
+    if (_isProcessing) return;
+    _isProcessing = true;
+
+    try {
+      final WriteBuffer allBytes = WriteBuffer();
+      for (final Plane plane in image.planes) {
+        allBytes.putUint8List(plane.bytes);
+      }
+      final bytes = allBytes.done().buffer.asUint8List();
+      final size = Size(image.width.toDouble(), image.height.toDouble());
+
+      final inputImageFormat = InputImageFormatValue.fromRawValue(image.format.raw);
+      if (inputImageFormat == null) {
+        print("Xato: InputImageFormat noto'g'ri.");
+        _isProcessing = false;
+        return;
+      }
+
+      final inputImage = InputImage.fromBytes(
+        bytes: bytes,
+        metadata: InputImageMetadata(
+          size: size,
+          bytesPerRow: image.planes[0].bytesPerRow,
+          format: InputImageFormat.nv21,
+          rotation: InputImageRotation.rotation90deg,
+        ),
+      );
+
+      final textRecognizer = TextRecognizer();
+      final RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
+
+      String result = '';
+      for (TextBlock block in recognizedText.blocks) {
+        result += block.text;
+      }
+      extractNumbersAndDates(result);
+    } catch (e) {
+      print("ML Kit xatosi: $e");
+      setState(() {});
     } finally {
-      setState(() => _isLoading = false);
+      _isProcessing = false;
     }
   }
 
   @override
+  void initState() {
+    super.initState();
+    setupCamera();
+  }
+
+  @override
+  void dispose() {
+    _controller?.stopImageStream();
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  void extractNumbersAndDates(String text) {
+    RegExp numberRegex = RegExp(r'\d{4} \d{4} \d{4} \d{4}');
+    RegExp dateRegex = RegExp(r'\d{2}/\d{2}');
+
+    Iterable<RegExpMatch> numberMatches = numberRegex.allMatches(text);
+    Iterable<RegExpMatch> dateMatches = dateRegex.allMatches(text);
+
+    String cardNumber = '';
+    String cardDate = '';
+    for (var match in numberMatches) {
+      cardNumber += "${match.group(0)}\n";
+    }
+    for (var match in dateMatches) {
+      cardDate += "${match.group(0)}";
+    }
+
+    if (cardDate.isNotEmpty && cardNumber.isNotEmpty) {
+      cardModel = CardModel(cardExpiry: cardDate, cardNumber: cardNumber);
+    } else {
+      cardModel = null;
+    }
+    setState(() {});
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Camera"),
-        centerTitle: true,
-      ),
-      body: Column(
-        children: [
-          if (_imageFile == null)
-            const Placeholder(fallbackHeight: 200.0)
-          else
-            Image.file(_imageFile!, height: 200, fit: BoxFit.contain),
-          const SizedBox(height: 20),
-          _isLoading
-              ? const CircularProgressIndicator()
-              : ElevatedButton(
-                  onPressed: _textOcr,
-                  child: const Text('Text OCR'),
+      backgroundColor: Colors.white,
+      body: _controller != null && _controller!.value.isInitialized
+          ? Stack(
+              children: [
+                Center(
+                  child: AspectRatio(
+                    aspectRatio: 1 / _controller!.value.aspectRatio,
+                    child: CameraPreview(_controller!),
+                  ),
                 ),
-          Expanded(
-            child: SingleChildScrollView(
-              child: Text(
-                _mlResult,
-                style: const TextStyle(fontSize: 16),
-              ),
-            ),
-          ),
-        ],
-      ),
+                Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: size.width * 0.85,
+                        height: size.height * 0.3,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.white, width: 5),
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          child: Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Text(
+                                cardModel != null ? cardModel!.fitchString : 'Kartangizni ramka ichiga olib keling',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (cardModel != null) ...[
+                        const SizedBox(height: 20),
+                        FilledButton(
+                          style: FilledButton.styleFrom(
+                            fixedSize: Size(size.width * 0.7, 55),
+                            backgroundColor: Colors.blue,
+                            shape: const RoundedRectangleBorder(
+                              borderRadius: BorderRadius.all(Radius.circular(15)),
+                            ),
+                          ),
+                          onPressed: () {
+                            context.pop(cardModel);
+                          },
+                          child: const Text("Kartani qo'shish"),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            )
+          : const Center(child: CircularProgressIndicator()),
     );
   }
 }

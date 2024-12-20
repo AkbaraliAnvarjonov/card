@@ -1,5 +1,4 @@
 import 'package:card_input/src/core/utils/widgets/masked_input_formatter.dart';
-
 import 'package:flutter/material.dart';
 
 class CustomTextField extends StatelessWidget {
@@ -22,26 +21,35 @@ class CustomTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextFormField(
-      controller: textEditingController,
-      textInputAction: TextInputAction.next,
-      keyboardType: TextInputType.number,
-      maxLength: maxLength,
-      autofocus: false,
-      obscureText: false,
-      inputFormatters: [MaskedInputFormatter(maskPattern: maskPattern)],
-      decoration: InputDecoration(
-        contentPadding: const EdgeInsets.symmetric(
-          vertical: 18,
-          horizontal: 12,
-        ),
-        suffix: suffix,
-        prefix: Icon(prefix),
-        counterText: '',
-        hintText: hintText,
-        border: const OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(15)),
-          borderSide: BorderSide(color: Colors.black, width: 1),
+    return SizedBox(
+      height: 60,
+      child: TextFormField(
+        controller: textEditingController,
+        textInputAction: TextInputAction.next,
+        keyboardType: TextInputType.number,
+        maxLength: maxLength,
+        autofocus: false,
+        obscureText: false,
+        cursorColor: Colors.blue,
+        inputFormatters: [MaskedInputFormatter(maskPattern: maskPattern)],
+        decoration: InputDecoration(
+          contentPadding: const EdgeInsets.symmetric(
+            vertical: 18,
+            horizontal: 12,
+          ),
+          prefixIcon: Icon(prefix),
+          suffixIcon: suffix,
+          counterText: '',
+          hintText: hintText,
+          hintStyle: const TextStyle(color: Colors.grey),
+          border: const OutlineInputBorder(
+            borderRadius: BorderRadius.all(Radius.circular(15)),
+            borderSide: BorderSide(color: Colors.black, width: 1),
+          ),
+          focusedBorder: const OutlineInputBorder(
+            borderRadius: BorderRadius.all(Radius.circular(15)),
+            borderSide: BorderSide(color: Colors.blue, width: 2),
+          ),
         ),
       ),
     );

@@ -3,6 +3,7 @@ import 'package:card_input/src/features/home/home_screen.dart';
 import 'package:card_input/src/features/nfc/nfc_screen.dart';
 import 'package:card_input/src/features/view_card/card_view_screen.dart';
 import 'package:card_input/src/shared/data/card_repository.dart';
+import 'package:card_input/src/shared/domain/models/card_model.dart';
 import 'package:card_input/src/shared/presentation/bloc/card_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -29,7 +30,9 @@ final GoRouter router = GoRouter(
       path: Routes.card,
       name: Routes.card,
       parentNavigatorKey: rootNavigatorKey,
-      builder: (_, __) => const CardViewScreen(),
+      builder: (_, state) => CardViewScreen(
+        extraData: state.extra as CardModel,
+      ),
     ),
     GoRoute(
       path: Routes.camera,

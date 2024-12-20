@@ -1,11 +1,12 @@
 import 'package:card_input/src/core/router/app_router.dart';
-import 'package:card_input/src/shared/domain/models/card_model.dart';
 import 'package:card_input/src/shared/presentation/bloc/card_bloc.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../shared/domain/models/card_model.dart';
+import '../nfc/nfc_screen.dart';
 import 'widgets/custom_text_field.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -33,8 +34,14 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
+  void getFromCardModel(CardModel cardModel) {
+    _cardExpiryController.text = cardModel.cardExpiry;
+    _cardNumberController.text = cardModel.cardNumber;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
     return BlocBuilder<CardBloc, CardState>(
       builder: (context, state) {
         return Scaffold(
@@ -45,23 +52,48 @@ class _HomeScreenState extends State<HomeScreen> {
             centerTitle: true,
             actions: [
               IconButton(
-                onPressed: () => context.pushNamed(Routes.nfc),
-                icon: const Icon(CupertinoIcons.news),
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (BuildContext context) {
+                      return Dialog(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: SizedBox(
+                          width: size.width * 0.9,
+                          height: size.height * 0.6,
+                          child: const NFCScreen(),
+                        ),
+                      );
+                    },
+                  );
+                },
+                icon: const Icon(CupertinoIcons.waveform),
               ),
             ],
           ),
           bottomNavigationBar: SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 30),
+              padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 10),
               child: FilledButton(
                 style: FilledButton.styleFrom(
+                  fixedSize: Size(size.width * 0.7, 55),
                   backgroundColor: Colors.blue,
-                  fixedSize: const Size(double.infinity, 55),
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.all(Radius.circular(15)),
+                  ),
                 ),
                 onPressed: () {
-                  
+                  context.pushNamed(
+                    Routes.card,
+                    extra: CardModel(
+                      cardExpiry: _cardExpiryController.text,
+                      cardNumber: _cardNumberController.text,
+                    ),
+                  );
                 },
-                child: const Text('Kartani qo`shish'),
+                child: const Text('Kartalar ro`yxatiga qo`shish'),
               ),
             ),
           ),
@@ -74,8 +106,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   hintText: 'Karta raqam',
                   prefix: CupertinoIcons.creditcard,
                   suffix: IconButton(
-                    onPressed: () {
-                      context.pushNamed(Routes.camera);
+                    onPressed: () async {
+                      final cardInfo = await context.pushNamed<CardModel>(Routes.camera);
+                      if (cardInfo != null) {
+                        getFromCardModel(cardInfo);
+                      }
                     },
                     icon: const Icon(CupertinoIcons.camera),
                   ),
